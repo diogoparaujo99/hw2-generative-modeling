@@ -12,13 +12,15 @@ from torchvision.utils import make_grid
 from matplotlib import pyplot as plt
 import time
 import os
+import json
 from utils import *
 
 def ae_loss(model, x):
     ##################################################################
     # TODO 2.2: Fill in MSE loss between x and its reconstruction.
     ##################################################################
-    loss = None
+    reconstruction = model.decoder(model.encoder(x))
+    loss = F.mse_loss(reconstruction, x, reduction='sum') / x.shape[0]
     ##################################################################
     #                          END OF YOUR CODE                      #
     ##################################################################
@@ -38,9 +40,12 @@ def vae_loss(model, x, beta = 1):
     # closed form, you can find the formula here:
     # (https://stats.stackexchange.com/questions/318748/deriving-the-kl-divergence-loss-for-vaes).
     ##################################################################
-    total_loss = None
-    recon_loss = None
-    kl_loss = None
+    mu, log_std = model.encoder(x)
+    z = mu + log_std.exp() * torch.randn_like(mu)
+    reconstruction = model.decoder(z)
+    recon_loss = F.mse_loss(reconstruction, x, reduction='sum') / x.shape[0]
+    kl_loss = 0.5 * (mu.square() + (2 * log_std).exp() - 1 - 2 * log_std).sum() / x.shape[0]
+    total_loss = recon_loss + beta * kl_loss
     ##################################################################
     #                          END OF YOUR CODE                      #
     ##################################################################
@@ -58,7 +63,7 @@ def linear_beta_scheduler(max_epochs=None, target_val = 1):
     # linearly from 0 at epoch 0 to target_val at epoch max_epochs.
     ##################################################################
     def _helper(epoch):
-        pass
+        return target_val * min(max(epoch / max_epochs, 0), 1)
     ##################################################################
     #                          END OF YOUR CODE                      #
     ##################################################################
@@ -102,7 +107,10 @@ def main(log_dir, loss_mode = 'vae', beta_mode = 'constant', num_epochs = 20, ba
          target_beta_val = 1, grad_clip=1, lr = 1e-3, eval_interval = 5):
 
     os.makedirs('data/'+ log_dir, exist_ok = True)
-    train_loader, val_loader = get_dataloaders()
+    torch.manual_seed(0)
+    np.random.seed(0)
+    torch.set_num_threads(8)
+    train_loader, val_loader = get_dataloaders(batch_size)
 
     variational = True if loss_mode == 'vae' else False
     model = AEModel(variational, latent_size, input_shape = (3, 32, 32)).cuda()
@@ -117,12 +125,16 @@ def main(log_dir, loss_mode = 'vae', beta_mode = 'constant', num_epochs = 20, ba
         beta_fn = linear_beta_scheduler(max_epochs=num_epochs, target_val = target_beta_val)
 
     plot_metrics = {}
+    history = []
     val_metrics = get_val_metrics(model, loss_mode, val_loader)
 
     for epoch in range(num_epochs):
         print('epoch', epoch)
         train_metrics = run_train_epoch(model, loss_mode, train_loader, optimizer, beta_fn(epoch))
         val_metrics = get_val_metrics(model, loss_mode, val_loader)
+        history.append(dict(epoch=epoch, beta=beta_fn(epoch),
+                            train={k: float(v) for k, v in train_metrics.items()},
+                            validation={k: float(v) for k, v in val_metrics.items()}))
         for k in val_metrics.keys():
             if k not in plot_metrics:
                 plot_metrics[k] = []
@@ -137,6 +149,12 @@ def main(log_dir, loss_mode = 'vae', beta_mode = 'constant', num_epochs = 20, ba
     for k,v in plot_metrics.items():
         plt.clf()
         save_plot(list(range(len(v))), v, "Epochs", k, f"{k} vs. Epochs", 'data/' + log_dir + f'/{k}_vs_iterations')
+    with open('data/' + log_dir + '/results.json', 'w') as output:
+        json.dump(dict(seed=0, epochs=num_epochs, latent_size=latent_size, loss_mode=loss_mode,
+                       beta_mode=beta_mode, target_beta=target_beta_val, history=history), output, indent=2)
+    checkpoint_dir = os.environ.get('VLR_CHECKPOINT_ROOT', '../../checkpoints/hw2')
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    torch.save(model.state_dict(), os.path.join(checkpoint_dir, log_dir + '.pth'))
 
 if __name__ == '__main__':
     # argparser:

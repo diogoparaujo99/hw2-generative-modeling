@@ -17,7 +17,7 @@ def compute_discriminator_loss(
     # Do not use discrim_interp, interp, lamb. They are placeholders
     # for Q1.5.
     ##################################################################
-    loss = None
+    loss = F.softplus(-discrim_real).mean() + F.softplus(discrim_fake).mean()
     ##################################################################
     #                          END OF YOUR CODE                      #
     ##################################################################
@@ -28,7 +28,7 @@ def compute_generator_loss(discrim_fake):
     ##################################################################
     # TODO 1.3: Implement GAN loss for the generator.
     ##################################################################
-    loss = None
+    loss = -F.softplus(discrim_fake).mean()
     ##################################################################
     #                          END OF YOUR CODE                      #
     ##################################################################
@@ -37,6 +37,7 @@ def compute_generator_loss(discrim_fake):
 
 if __name__ == "__main__":
     args = get_args()
+    torch.manual_seed(0)
     gen = Generator().cuda()
     disc = Discriminator().cuda()
     prefix = "data_gan/"

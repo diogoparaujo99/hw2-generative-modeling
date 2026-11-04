@@ -16,7 +16,7 @@ def get_dataloaders(batch_size = 256):
 
     dataset_cls = datasets.CIFAR10 #datasets.CIFAR100
     train_loader = torch.utils.data.DataLoader(
-        dataset_cls(root='data', train=True, transform=transforms.Compose([
+        dataset_cls(root='../datasets', train=True, transform=transforms.Compose([
             # transforms.RandomHorizontalFlip(),
             # transforms.RandomCrop(32, 4),
             transforms.ToTensor(),
@@ -26,7 +26,7 @@ def get_dataloaders(batch_size = 256):
         num_workers=4, pin_memory=True)
 
     val_loader = torch.utils.data.DataLoader(
-        dataset_cls(root='data', train=False, transform=transforms.Compose([
+        dataset_cls(root='../datasets', train=False, transform=transforms.Compose([
             transforms.ToTensor(),
            # transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
         ])),
