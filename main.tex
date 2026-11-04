@@ -472,17 +472,14 @@ $\beta^*$ value: 0.8.
 \end{figure}
 I tested $\beta=0.8$, $1.0$, and $1.2$ using latent size 1024.
 I selected $0.8$ because its final sample grid retained slightly clearer
-object boundaries, although all three grids remained blurry.
+object boundaries, although all three grids remained blurry. With constant $\beta=0.8$, evaluation reconstruction loss decreased to
+126.46, while KL loss fluctuated and finished at 69.49. 
 
-With constant $\beta=0.8$, evaluation reconstruction loss decreased to
-126.46, while KL loss fluctuated and finished at 69.49. With annealing,
-reconstruction loss fell faster early on, then rose as the KL penalty
-increased. It finished at 112.03, with KL loss 84.27. The initially weak
-penalty lets the model focus on reconstruction; increasing it then reduces
-the large early KL loss. The annealed samples show somewhat more structured
+With annealing, the reconstruction loss decreased quickly early on, then increased overall as $\beta$ grew. This make sense, because the stronger weight on KL term encouraged latent distributions closer to the prior, which promotes the minimization of the KL loss at the expense of reconstruction accuracy. Therefore, with annealing we can see the trade-off between reconstruction accuracy and making the latent distributions closer to the standard normal prior. The annealed samples show somewhat more structured
 shapes, but the improvement is modest and fine details are still missing.
-The supplied schedule targets $0.8$ at epoch 20, so its value at the final
+This schedule targets $0.8$ at epoch 20, so its value at the final
 plotted epoch, 19, is $0.76$.
+
 \end{solution}
 \end{questions}
 \newpage
@@ -572,7 +569,6 @@ remain difficult to identify.
 \begin{enumerate}
     \item Did you receive any help whatsoever from anyone in solving this assignment?
     \begin{checkboxes}
-     \choice Yes
      \choice No
     \end{checkboxes}
     \begin{itemize}
@@ -586,7 +582,6 @@ remain difficult to identify.
 
     \item Did you give any help whatsoever to anyone in solving this assignment?
     \begin{checkboxes}
-     \choice Yes
      \choice No\
     \end{checkboxes}
     \begin{itemize}
