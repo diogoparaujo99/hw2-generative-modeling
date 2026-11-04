@@ -1,8 +1,6 @@
 vae_solutions/data/
-gan/data_gan/
-gan/data_ls_gan/
-gan/data_wgan_gp/
 datasets/
+/datasets
 
 gan_solutions/data_gan/
 gan_solutions/data_ls_gan/
@@ -13,5 +11,12 @@ diffusion_solutions/data_ddim/
 diffusion_solutions/data_ddpm/
 diffusion_solutions/epoch_199.pth
 
-flow_matching/flow_euler
 flow_matching/fm_final.pth
+*.pt
+*.pth
+*.pyc
+*.log
+*.aux
+*.out
+*.synctex.gz
+hw2-generative-modeling.zip

@@ -1,6 +1,7 @@
 
 import argparse
 import os
+import json
 import torch
 import numpy as np
 from torchvision.utils import save_image
@@ -17,7 +18,8 @@ def get_fid(gen, dataset_name, dataset_resolution, z_dimension, batch_size, num_
     # Hint: Refer to diffusion/inference.py
     # Note: The output must be in the range [0, 255]!
     ##################################################################
-    gen_fn = None
+    gen_fn = lambda z: gen.sample_given_z(z.reshape(-1, 3, dataset_resolution, dataset_resolution),
+                                         (z.shape[0], 3, dataset_resolution, dataset_resolution)).clamp(0, 1) * 255
 
     ##################################################################
     #                          END OF YOUR CODE                      #
@@ -43,6 +45,9 @@ if __name__ == "__main__":
     parser.add_argument('--steps', type=int, default=50, help="Number of ODE steps to integrate")
     parser.add_argument('--compute-fid', action="store_true")
     args = parser.parse_args()
+    torch.manual_seed(0)
+    np.random.seed(0)
+    torch.set_num_threads(8)
 
     prefix = f"flow_{args.solver}/"
     if not os.path.exists(prefix):
@@ -75,3 +80,6 @@ if __name__ == "__main__":
         if args.compute_fid:
             score = get_fid(flow, "cifar10", 32, 32*32*3, batch_size=256, num_gen=10_000)
             print("FID:", score)
+            with open(os.path.join(prefix, 'results.json'), 'w') as output:
+                json.dump(dict(seed=0, grid_points=args.steps, euler_updates=args.steps - 1,
+                               samples=10_000, fid=score), output, indent=2)

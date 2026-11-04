@@ -1,0 +1,7 @@
+{
+  "seed": 0,
+  "grid_points": 50,
+  "euler_updates": 49,
+  "samples": 10000,
+  "fid": 30.909644014735306
+}

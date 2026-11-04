@@ -1,5 +1,6 @@
 from glob import glob
 import os
+import json
 import torch
 from tqdm import tqdm
 from utils import get_fid, interpolate_latent_space, save_plot
@@ -28,8 +29,10 @@ def get_optimizers_and_schedulers(gen, disc):
     # The learning rate for the generator should be decayed to 0 over
     # 100K iterations.
     ##################################################################
-    scheduler_discriminator = None
-    scheduler_generator = None
+    scheduler_discriminator = torch.optim.lr_scheduler.LambdaLR(
+        optim_discriminator, lambda step: max(0.0, 1 - step / 500_000))
+    scheduler_generator = torch.optim.lr_scheduler.LambdaLR(
+        optim_generator, lambda step: max(0.0, 1 - step / 100_000))
     ##################################################################
     #                          END OF YOUR CODE                      #
     ##################################################################
@@ -69,6 +72,8 @@ def train_model(
     log_period=10000,
     amp_enabled=True,
 ):
+    torch.manual_seed(0)
+    torch.set_num_threads(8)
     torch.backends.cudnn.benchmark = True # speed up training
     ds_transforms = build_transforms()
     train_loader = torch.utils.data.DataLoader(
@@ -105,8 +110,9 @@ def train_model(
                 # 2. Compute discriminator output on the train batch.
                 # 3. Compute the discriminator output on the generated data.
                 ##################################################################
-                discrim_real = None
-                discrim_fake = None
+                fake_batch = gen(train_batch.shape[0]).detach()
+                discrim_real = disc(train_batch)
+                discrim_fake = disc(fake_batch)
                 ##################################################################
                 #                          END OF YOUR CODE                      #
                 ##################################################################
@@ -115,8 +121,13 @@ def train_model(
                 # TODO 1.5 Compute the interpolated batch and run the
                 # discriminator on it.
                 ###################################################################
-                interp = None
-                discrim_interp = None
+                if disc_loss_fn.__module__ == 'q1_5' or 'wgan' in prefix:
+                    alpha = torch.rand(train_batch.shape[0], 1, 1, 1, device=train_batch.device)
+                    interp = (alpha * train_batch + (1 - alpha) * fake_batch).requires_grad_(True)
+                    discrim_interp = disc(interp)
+                else:
+                    interp = None
+                    discrim_interp = None
                 ##################################################################
                 #                          END OF YOUR CODE                      #
                 ##################################################################
@@ -136,8 +147,8 @@ def train_model(
                     # TODO 1.2: Compute generator and discriminator output on
                     # generated data.
                     ###################################################################
-                    fake_batch = None
-                    discrim_fake = None
+                    fake_batch = gen(train_batch.shape[0])
+                    discrim_fake = disc(fake_batch)
                     ##################################################################
                     #                          END OF YOUR CODE                      #
                     ##################################################################
@@ -156,7 +167,7 @@ def train_model(
                         # TODO 1.2: Generate samples using the generator.
                         # Make sure they lie in the range [0, 1]!
                         ##################################################################
-                        generated_samples = None
+                        generated_samples = (gen(100) + 1) / 2
                         ##################################################################
                         #                          END OF YOUR CODE                      #
                         ##################################################################
@@ -165,12 +176,15 @@ def train_model(
                         prefix + "samples_{}.png".format(iters),
                         nrow=10,
                     )
-                    if os.environ.get('PYTORCH_JIT', 1):
-                        torch.jit.save(torch.jit.script(gen), prefix + "/generator.pt")
-                        torch.jit.save(torch.jit.script(disc), prefix + "/discriminator.pt")
+                    checkpoint_dir = os.path.join(os.environ.get('VLR_CHECKPOINT_ROOT', '../../checkpoints/hw2'),
+                                                  os.path.basename(os.path.normpath(prefix)))
+                    os.makedirs(checkpoint_dir, exist_ok=True)
+                    if os.environ.get('PYTORCH_JIT', '1') != '0':
+                        torch.jit.save(torch.jit.script(gen), checkpoint_dir + "/generator.pt")
+                        torch.jit.save(torch.jit.script(disc), checkpoint_dir + "/discriminator.pt")
                     else:
-                        torch.save(gen, prefix + "/generator.pt")
-                        torch.save(disc, prefix + "/discriminator.pt")
+                        torch.save(gen, checkpoint_dir + "/generator.pt")
+                        torch.save(disc, checkpoint_dir + "/discriminator.pt")
                     fid = get_fid(
                         gen,
                         dataset_name="cub",
@@ -197,6 +211,16 @@ def train_model(
             scaler.update()
             iters += 1
             pbar.update(1)
+            if iters >= num_iterations:
+                break
+    with torch.no_grad(), torch.cuda.amp.autocast(enabled=amp_enabled):
+        save_image(((gen(100) + 1) / 2).float(), prefix + f'samples_{iters}.png', nrow=10)
+        interpolate_latent_space(gen, prefix + f'interpolations_{iters}.png')
+    checkpoint_dir = os.path.join(os.environ.get('VLR_CHECKPOINT_ROOT', '../../checkpoints/hw2'),
+                                  os.path.basename(os.path.normpath(prefix)))
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    torch.jit.save(torch.jit.script(gen), checkpoint_dir + '/generator.pt')
+    torch.jit.save(torch.jit.script(disc), checkpoint_dir + '/discriminator.pt')
     fid = get_fid(
         gen,
         dataset_name="cub",
@@ -206,3 +230,6 @@ def train_model(
         num_gen=50_000,
     )
     print(f"Final FID (Full 50K): {fid}")
+    with open(prefix + 'results.json', 'w') as output:
+        json.dump(dict(iterations=iters, final_fid_50000=fid,
+                       logged_iterations=iters_list, logged_fid_10000=fids_list), output, indent=2)

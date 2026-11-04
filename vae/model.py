@@ -24,8 +24,13 @@ class Encoder(nn.Module):
         # TODO 2.1: Set up the network layers. First create the self.convs.
         # Then create self.fc with output dimension == self.latent_dim
         ##################################################################
-        self.convs = None
-        self.fc = None
+        self.convs = nn.Sequential(
+            nn.Conv2d(input_shape[0], 32, 3, padding=1), nn.ReLU(),
+            nn.Conv2d(32, 64, 3, stride=2, padding=1), nn.ReLU(),
+            nn.Conv2d(64, 128, 3, stride=2, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 256, 3, stride=2, padding=1),
+        )
+        self.fc = nn.Linear(256 * (input_shape[1] // 8) * (input_shape[2] // 8), latent_dim)
         ##################################################################
         #                          END OF YOUR CODE                      #
         ##################################################################
@@ -35,7 +40,7 @@ class Encoder(nn.Module):
         # TODO 2.1: Forward pass through the network, output should be
         # of dimension == self.latent_dim
         ##################################################################
-        pass
+        return self.fc(self.convs(x).flatten(1))
         ##################################################################
         #                          END OF YOUR CODE                      #
         ##################################################################
@@ -47,7 +52,7 @@ class VAEEncoder(Encoder):
         # TODO 2.4: Fill in self.fc, such that output dimension is
         # 2*self.latent_dim
         ##################################################################
-        self.fc = None
+        self.fc = nn.Linear(self.fc.in_features, 2 * latent_dim)
         ##################################################################
         #                          END OF YOUR CODE                      #
         ##################################################################
@@ -57,8 +62,7 @@ class VAEEncoder(Encoder):
         # TODO 2.1: Forward pass through the network, should return a
         # tuple of 2 tensors, mu and log_std
         ##################################################################
-        mu = None
-        log_std = None
+        mu, log_std = self.fc(self.convs(x).flatten(1)).chunk(2, dim=1)
         ##################################################################
         #                          END OF YOUR CODE                      #
         ##################################################################
@@ -87,9 +91,14 @@ class Decoder(nn.Module):
         # TODO 2.1: Set up the network layers. First, compute
         # self.base_size, then create the self.fc and self.deconvs.
         ##################################################################
-        self.base_size = 0
-        self.deconvs = None
-        self.fc = None
+        self.base_size = (256, output_shape[1] // 8, output_shape[2] // 8)
+        self.fc = nn.Linear(latent_dim, int(np.prod(self.base_size)))
+        self.deconvs = nn.Sequential(
+            nn.ReLU(), nn.ConvTranspose2d(256, 128, 4, stride=2, padding=1),
+            nn.ReLU(), nn.ConvTranspose2d(128, 64, 4, stride=2, padding=1),
+            nn.ReLU(), nn.ConvTranspose2d(64, 32, 4, stride=2, padding=1),
+            nn.ReLU(), nn.Conv2d(32, output_shape[0], 3, padding=1),
+        )
         ##################################################################
         #                          END OF YOUR CODE                      #
         ##################################################################
@@ -100,7 +109,7 @@ class Decoder(nn.Module):
         # TODO 2.1: Forward pass through the network, first through
         # self.fc, then self.deconvs.
         ##################################################################
-        pass
+        return self.deconvs(self.fc(z).reshape(-1, *self.base_size))
         ##################################################################
         #                          END OF YOUR CODE                      #
         ##################################################################
